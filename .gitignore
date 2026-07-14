@@ -1,0 +1,6 @@
+# Ignore large fasttext model vector file
+agri_fasttext.model.wv.vectors_ngrams.npy
+
+# Python caching and checkpoints
+__pycache__/
+.ipynb_checkpoints/
