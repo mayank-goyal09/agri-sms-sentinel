@@ -1,5 +1,7 @@
-# Ignore large fasttext model vector file
-agri_fasttext.model.wv.vectors_ngrams.npy
+# Ignore model checkpoints and weights
+*.model*
+*.pkl
+*.npy
 
 # Python caching and checkpoints
 __pycache__/
