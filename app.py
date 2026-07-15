@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import pickle
 from gensim.models import Word2Vec
-from utils import clean_text, get_sentence_vector
+from utils import clean_text, get_sentence_vector, is_agricultural_query
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -135,12 +135,9 @@ with tab1:
             cleaned_query = clean_text(user_input)
             
             # Out-Of-Vocabulary / Spam Check
-            words = cleaned_query.split()
-            valid_words = [w for w in words if w in w2v_model.wv]
-            
             st.subheader("Moderator Verdict")
             
-            if not valid_words:
+            if not is_agricultural_query(user_input):
                 st.error("❌ **Spam / Unrelated Content Blocked**")
                 st.warning("⚠️ **Reason:** No agricultural or regional terms detected in the vocabulary. Routed to **General Customer Support (General Inquiries)**.")
             else:
@@ -186,15 +183,12 @@ with tab2:
                 results = []
                 for query in df_batch["text"]:
                     cleaned = clean_text(str(query))
-                    words = cleaned.split()
-                    valid_words = [w for w in words if w in w2v_model.wv]
-                    
-                    if not valid_words:
+                    if not is_agricultural_query(str(query)):
                         results.append({
                             "Original SMS": query,
                             "Cleaned SMS": cleaned,
                             "Assigned Route": "Spam / General Support",
-                            "Confidence": 1.0,
+                            "Confidence": 100.0,
                             "Status": "🚨 Flagged / Spam"
                         })
                     else:
