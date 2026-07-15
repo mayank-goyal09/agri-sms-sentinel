@@ -106,10 +106,12 @@ sample_queries = {
     "Empty / Punctuation only": "???!!!"
 }
 
-query_value = ""
+if "farmers_input" not in st.session_state:
+    st.session_state["farmers_input"] = ""
+
 for label, query in sample_queries.items():
     if st.sidebar.button(label):
-        query_value = query
+        st.session_state["farmers_input"] = query
 
 # --- MAIN DASHBOARD LAYOUT ---
 st.markdown("<h1 class='main-title'>🌾 Agri-SMS Sentinel & Moderator</h1>", unsafe_allow_html=True)
@@ -121,7 +123,7 @@ tab1, tab2, tab3 = st.tabs(["🌾 Farmers SMS Portal", "🛡️ Moderator Comman
 # ----------------- TAB 1: Farmers SMS Portal -----------------
 with tab1:
     st.header("Query Ingestion")
-    user_input = st.text_input("Enter SMS Content:", value=query_value, placeholder="e.g., aloo rates or weather tomorrow rain", key="farmers_input")
+    user_input = st.text_input("Enter SMS Content:", placeholder="e.g., aloo rates or weather tomorrow rain", key="farmers_input")
     
     if st.button("Submit & Route SMS 🚀"):
         if user_input.strip() == "":
