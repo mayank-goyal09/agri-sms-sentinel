@@ -2,8 +2,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
-from gensim.models import Word2Vec
-from utils import clean_text, get_sentence_vector, is_agricultural_query
+import os
+import requests
+import json
+from utils import clean_text, is_agricultural_query
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -68,21 +70,92 @@ st.markdown("""
 # --- LOAD MODELS ---
 @st.cache_resource
 def load_models():
-    w2v_model = Word2Vec.load("agri_word2vec.model")
+    with open('tfidf_vectorizer.pkl', 'rb') as f:
+        tfidf_vec = pickle.load(f)
     with open('intent_classifier.pkl', 'rb') as f:
         lr_clf = pickle.load(f)
-    return w2v_model, lr_clf
+    return tfidf_vec, lr_clf
 
 try:
-    w2v_model, lr_clf = load_models()
+    tfidf_vec, lr_clf = load_models()
 except Exception as e:
-    st.error(f"⚠️ Error loading models: {e}. Please ensure the training pipeline has run and generated the model files.")
-    w2v_model, lr_clf = None, None
+    st.error(f"⚠️ Error loading models: {e}. Please ensure train_model.py has run and generated the model files.")
+    tfidf_vec, lr_clf = None, None
+
+def query_gemini_api(api_key, text):
+    """
+    Queries Gemini 2.5 Flash API to classify intent and extract entities in JSON.
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+    prompt = f'''
+You are an expert agricultural SMS router and moderator. Your job is to classify the intent of a farmer's SMS message.
+The message may contain typing errors, regional Indian slang (e.g. Hindi, Hinglish, Punjabi, transliterated Hindi).
+
+Classify the query into one of the following 5 categories:
+- "market": Inquiries about crop prices, rates, bhav, mandi, market rates, or selling crops.
+- "disease": Crop disease, pests, yellowing leaves, bugs, sick crops, or pesticide advice.
+- "weather": Rain, storm, wind, heat, temperature, cold, mosam, or weather forecasts.
+- "advice": Fertilizers, urea, dap, seeds, water irrigation, intercropping, and general farming techniques.
+- "subsidy": Government loans, schemes, sabsidi, bank, pm kisan, or karz.
+
+If the query is completely unrelated to agriculture, farming, or regional weather/markets (e.g. spam, general chit-chat), classify it as "spam".
+
+Return a valid raw JSON object only (no markdown, no backticks, no wrap) matching this schema:
+{{
+  "intent": "market" | "disease" | "weather" | "advice" | "subsidy" | "spam",
+  "confidence": 0.0 to 1.0,
+  "reason": "Brief reason for classification in English",
+  "entities": {{
+    "crops": ["crop name if mentioned"],
+    "location": "location/mandi if mentioned",
+    "materials": ["fertilizer/pesticide names if mentioned"]
+  }}
+}}
+
+SMS Content: "{text}"
+JSON:
+'''
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        raw_text = data['candidates'][0]['content']['parts'][0]['text'].strip()
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+        return json.loads(raw_text.strip())
+    except Exception as e:
+        return {"error": str(e)}
 
 # --- SIDEBAR CONFIGURATION ---
 st.sidebar.image("https://img.icons8.com/color/96/shield.png", width=80)
 st.sidebar.title("🛡️ Moderator Controls")
-st.sidebar.markdown("Configure thresholds for automated routing and spam filtration.")
+
+st.sidebar.subheader("🤖 NLP Classifier Engine")
+engine_mode = st.sidebar.radio(
+    "Select Classifier Engine:",
+    ["Local TF-IDF Classifier", "Gemini AI Router (Cloud)"]
+)
+
+gemini_api_key = ""
+if engine_mode == "Gemini AI Router (Cloud)":
+    gemini_api_key = st.sidebar.text_input(
+        "Enter Gemini API Key:",
+        value=os.getenv("GEMINI_API_KEY", ""),
+        type="password",
+        help="Get a free API key from Google AI Studio."
+    )
+
+st.sidebar.divider()
+st.sidebar.markdown("Configure thresholds for automated routing.")
 
 # Confidence routing threshold slider
 threshold = st.sidebar.slider(
@@ -128,44 +201,86 @@ with tab1:
     if st.button("Submit & Route SMS 🚀"):
         if user_input.strip() == "":
             st.error("Please enter a query or choose a sample SMS from the sidebar!")
-        elif w2v_model is None or lr_clf is None:
-            st.error("Model files not loaded. Please run the training pipeline first.")
+        elif engine_mode == "Local TF-IDF Classifier" and (tfidf_vec is None or lr_clf is None):
+            st.error("Local model files not loaded. Please run train_model.py first.")
+        elif engine_mode == "Gemini AI Router (Cloud)" and not gemini_api_key.strip():
+            st.error("Please enter a Gemini API Key in the sidebar to run the cloud engine.")
         else:
-            # Preprocessing
             cleaned_query = clean_text(user_input)
-            
-            # Out-Of-Vocabulary / Spam Check
             st.subheader("Moderator Verdict")
             
-            if not is_agricultural_query(user_input):
-                st.error("❌ **Spam / Unrelated Content Blocked**")
-                st.warning("⚠️ **Reason:** No agricultural or regional terms detected in the vocabulary. Routed to **General Customer Support (General Inquiries)**.")
-            else:
-                # Vectorization
-                vector = get_sentence_vector(cleaned_query, w2v_model.wv).reshape(1, -1)
-                
-                # Predict
-                prediction = lr_clf.predict(vector)[0]
-                probs = lr_clf.predict_proba(vector)
-                confidence = np.max(probs)
-                
-                st.markdown(f"**Parsed SMS:** `{cleaned_query}`")
-                
-                if confidence < threshold:
-                    st.warning(f"⚠️ **Low Confidence Support Route ({confidence*100:.1f}%)**")
-                    st.info(f"Routed to **Human Expert Support** (Predicted Department: **{prediction.upper()}** but below routing threshold).")
+            dept_info = {
+                "market": "Agronomy Markets & Price Commission (Mandi Rates)",
+                "disease": "Plant Pathology Department (Crop Diseases & Pests)",
+                "weather": "Agricultural Meteorology Service (Weather Forecasts)",
+                "advice": "Agricultural Extension & Crop Management advisory",
+                "subsidy": "Agricultural Finance & Government Schemes department"
+            }
+            
+            if engine_mode == "Local TF-IDF Classifier":
+                # Out-Of-Vocabulary / Spam Check
+                if not is_agricultural_query(user_input):
+                    st.error("❌ **Spam / Unrelated Content Blocked**")
+                    st.warning("⚠️ **Reason:** No agricultural or regional terms detected in the vocabulary. Routed to **General Customer Support (General Inquiries)**.")
                 else:
-                    st.success(f"✅ **Automated Route Approved ({confidence*100:.1f}%)**")
-                    st.info(f"Routed directly to **{prediction.upper()}** Department.")
+                    # Vectorization using TF-IDF
+                    vector = tfidf_vec.transform([cleaned_query])
                     
-                    dept_info = {
-                        "market": "Agronomy Markets & Price Commission (Mandi Rates)",
-                        "disease": "Plant Pathology Department (Crop Diseases & Pests)",
-                        "weather": "Agricultural Meteorology Service (Weather Forecasts)",
-                        "advice": "Agricultural Extension & Crop Management advisory",
-                        "subsidy": "Agricultural Finance & Government Schemes department"
-                    }
-                    st.markdown(f"📍 **Target Desk:** {dept_info.get(prediction, 'General Support')}")
+                    # Predict
+                    prediction = lr_clf.predict(vector)[0]
+                    probs = lr_clf.predict_proba(vector)
+                    confidence = np.max(probs)
+                    
+                    st.markdown(f"**Parsed SMS:** `{cleaned_query}`")
+                    
+                    if confidence < threshold:
+                        st.warning(f"⚠️ **Low Confidence Support Route ({confidence*100:.1f}%)**")
+                        st.info(f"Routed to **Human Expert Support** (Predicted Department: **{prediction.upper()}** but below routing threshold).")
+                    else:
+                        st.success(f"✅ **Automated Route Approved ({confidence*100:.1f}%)**")
+                        st.info(f"Routed directly to **{prediction.upper()}** Department.")
+                        st.markdown(f"📍 **Target Desk:** {dept_info.get(prediction, 'General Support')}")
+            
+            else: # Gemini AI Router
+                with st.spinner("🧠 Querying Gemini AI Router..."):
+                    result = query_gemini_api(gemini_api_key, user_input)
+                
+                if "error" in result:
+                    st.error(f"❌ **Gemini API Error:** {result['error']}")
+                else:
+                    intent = result.get("intent", "spam").lower()
+                    confidence = result.get("confidence", 0.0)
+                    reason = result.get("reason", "No reason provided.")
+                    entities = result.get("entities", {})
+                    
+                    st.markdown(f"**Parsed SMS:** `{cleaned_query}`")
+                    
+                    if intent == "spam":
+                        st.error("❌ **Spam / Unrelated Content Blocked (Cloud Engine)**")
+                        st.warning(f"⚠️ **AI Reason:** {reason}")
+                        st.info("Routed to **General Customer Support (General Inquiries)**.")
+                    else:
+                        if confidence < threshold:
+                            st.warning(f"⚠️ **Low Confidence Support Route ({confidence*100:.1f}%)**")
+                            st.info(f"Routed to **Human Expert Support** (Predicted Department: **{intent.upper()}** but below routing threshold).")
+                        else:
+                            st.success(f"✅ **Automated Route Approved ({confidence*100:.1f}%)**")
+                            st.info(f"Routed directly to **{intent.upper()}** Department.")
+                            st.markdown(f"📍 **Target Desk:** {dept_info.get(intent, 'General Support')}")
+                        
+                        # Display extracted entities in a nice card
+                        st.markdown("---")
+                        st.subheader("💡 Extracted Query Metadata (NER)")
+                        col_ent1, col_ent2 = st.columns(2)
+                        with col_ent1:
+                            crops_found = ", ".join(entities.get("crops", []))
+                            st.markdown(f"🌾 **Crops Detected:** `{crops_found if crops_found else 'None'}`")
+                            materials_found = ", ".join(entities.get("materials", []))
+                            st.markdown(f"🧪 **Inputs/Materials:** `{materials_found if materials_found else 'None'}`")
+                        with col_ent2:
+                            loc_found = entities.get("location", "None")
+                            st.markdown(f"📍 **Location/Mandi:** `{loc_found if loc_found else 'None'}`")
+                            st.markdown(f"💬 **AI Reasoning:** *\"{reason}\"*")
 
 # ----------------- TAB 2: Moderator Command Center -----------------
 with tab2:
@@ -180,30 +295,77 @@ with tab2:
             if "text" not in df_batch.columns:
                 st.error("CSV must contain a column named 'text'!")
             else:
-                results = []
-                for query in df_batch["text"]:
-                    cleaned = clean_text(str(query))
-                    if not is_agricultural_query(str(query)):
-                        results.append({
-                            "Original SMS": query,
-                            "Cleaned SMS": cleaned,
-                            "Assigned Route": "Spam / General Support",
-                            "Confidence": 100.0,
-                            "Status": "🚨 Flagged / Spam"
-                        })
-                    else:
-                        vector = get_sentence_vector(cleaned, w2v_model.wv).reshape(1, -1)
-                        prediction = lr_clf.predict(vector)[0]
-                        confidence = np.max(lr_clf.predict_proba(vector))
+                if engine_mode == "Gemini AI Router (Cloud)" and not gemini_api_key.strip():
+                    st.error("Please enter a Gemini API Key in the sidebar to run the cloud engine.")
+                else:
+                    results = []
+                    
+                    if engine_mode == "Local TF-IDF Classifier":
+                        for query in df_batch["text"]:
+                            cleaned = clean_text(str(query))
+                            if not is_agricultural_query(str(query)):
+                                results.append({
+                                    "Original SMS": query,
+                                    "Cleaned SMS": cleaned,
+                                    "Assigned Route": "Spam / General Support",
+                                    "Confidence": 100.0,
+                                    "Status": "🚨 Flagged / Spam"
+                                })
+                            else:
+                                vector = tfidf_vec.transform([cleaned])
+                                prediction = lr_clf.predict(vector)[0]
+                                confidence = np.max(lr_clf.predict_proba(vector))
+                                
+                                status = "✅ Routed Automatically" if confidence >= threshold else "⚠️ Needs Review"
+                                results.append({
+                                    "Original SMS": query,
+                                    "Cleaned SMS": cleaned,
+                                    "Assigned Route": prediction.upper(),
+                                    "Confidence": round(confidence * 100, 1),
+                                    "Status": status
+                                })
+                    else: # Gemini AI Router
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        total_rows = len(df_batch)
                         
-                        status = "✅ Routed Automatically" if confidence >= threshold else "⚠️ Needs Review"
-                        results.append({
-                            "Original SMS": query,
-                            "Cleaned SMS": cleaned,
-                            "Assigned Route": prediction.upper(),
-                            "Confidence": round(confidence * 100, 1),
-                            "Status": status
-                        })
+                        for i, query in enumerate(df_batch["text"]):
+                            cleaned = clean_text(str(query))
+                            status_text.text(f"Processing row {i+1}/{total_rows} with Gemini...")
+                            result = query_gemini_api(gemini_api_key, str(query))
+                            
+                            if "error" in result:
+                                results.append({
+                                    "Original SMS": query,
+                                    "Cleaned SMS": cleaned,
+                                    "Assigned Route": "API ERROR",
+                                    "Confidence": 0.0,
+                                    "Status": "🚨 API Error"
+                                })
+                            else:
+                                intent = result.get("intent", "spam").lower()
+                                confidence = result.get("confidence", 0.0)
+                                
+                                if intent == "spam":
+                                    results.append({
+                                        "Original SMS": query,
+                                        "Cleaned SMS": cleaned,
+                                        "Assigned Route": "Spam / General Support",
+                                        "Confidence": round(confidence * 100, 1),
+                                        "Status": "🚨 Flagged / Spam"
+                                    })
+                                else:
+                                    status = "✅ Routed Automatically" if confidence >= threshold else "⚠️ Needs Review"
+                                    results.append({
+                                        "Original SMS": query,
+                                        "Cleaned SMS": cleaned,
+                                        "Assigned Route": intent.upper(),
+                                        "Confidence": round(confidence * 100, 1),
+                                        "Status": status
+                                    })
+                            progress_bar.progress((i + 1) / total_rows)
+                        
+                        status_text.text("Batch processing completed!")
                 
                 df_results = pd.DataFrame(results)
                 st.dataframe(df_results.style.map(
@@ -263,4 +425,4 @@ with tab3:
         """, unsafe_allow_html=True)
 
     st.markdown("### Performance Overview")
-    st.markdown("The system runs a **Gensim Word2Vec** semantic projection space paired with a **Logistic Regression** classifier. Out-of-Vocabulary (OOV) checks act as a gatekeeper to intercept spam/unrelated inputs automatically.")
+    st.markdown("The system runs a robust character-level **TF-IDF Subword Vectorizer** (with n-grams ranging from 2 to 5 characters) paired with a **Logistic Regression** classifier for lightning-fast local predictions. It also features a togglable cloud-based **Gemini 2.5 Flash** routing engine for high-precision, context-aware multilingual processing and entity extraction.")
