@@ -1,5 +1,4 @@
 import re
-import numpy as np
 
 def clean_text(text: str) -> str:
     """
@@ -14,15 +13,31 @@ def clean_text(text: str) -> str:
     text = re.sub(r'[^a-z0-9\s]', '', text)
     return " ".join(text.split())
 
-def get_sentence_vector(text: str, model) -> np.ndarray:
+def is_agricultural_query(text: str) -> bool:
     """
-    Cleans text and calculates the average word vector of the tokens.
-    Accepts either a Gensim model (Word2Vec/FastText) or model.wv (KeyedVectors).
+    Checks if the text contains any agricultural or regional vocabulary terms.
     """
-    model_wv = model.wv if hasattr(model, 'wv') else model
     cleaned = clean_text(text)
     words = cleaned.split()
-    vectors = [model_wv[w] for w in words if w in model_wv]
-    if not vectors:
-        return np.zeros(model_wv.vector_size)
-    return np.mean(vectors, axis=0)
+    
+    # Vocabulary terms drawn from generate_dataset.py
+    agri_keywords = {
+        # Crops
+        "wheat", "wheet", "gehu", "gehun", "kanak", "rice", "rise", "dhan", "chawal", 
+        "corn", "makka", "cotton", "kapas", "sugarcane", "ganna", "mustard", "sarso", 
+        "potato", "aloo", "onion", "pyaz", "tomato", "tamatar", "soybean", "soyabean",
+        # Market
+        "price", "pryce", "rate", "ret", "bhav", "baav", "paise", "prise", "mkt", "market", "mandi", "markit",
+        # Weather
+        "weather", "wether", "mosam", "mausam", "wedder", "rain", "barish", "baarish", "temp", "dhoop", "heat",
+        # Disease
+        "disease", "sick", "bimari", "keeda", "pest", "bugs", "yellowing", "spots", "dying", "sukha", "dry",
+        "leaves", "pattiyan", "root", "jad", "stem", "tana", "crop", "fasal",
+        # Advice
+        "fertilizer", "khad", "urea", "dap", "water", "pani", "seeds", "beej", "plant", "boi", "grow", "ugana",
+        # Subsidy
+        "subsidy", "sabsidi", "scheme", "schem", "yojana", "loan", "karz", "govt", "sarkar", "pm", "kisan", "bank"
+    }
+    
+    return any(w in agri_keywords for w in words)
+
