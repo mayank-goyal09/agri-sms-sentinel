@@ -5,6 +5,10 @@
   
   <p align="center">
     <strong>A State-of-the-Art Hybrid AI Ingestion, Filtering, and Routing Command Center for Regional Farmer Queries.</strong>
+    <br /><br />
+    <a href="https://agri-sms-sentinel-project.streamlit.app/" target="_blank">
+      <img src="https://static.streamlit.io/badges/streamlit_badge_black_white.svg" alt="Streamlit App" />
+    </a>
   </p>
 
   <!-- Badges -->
