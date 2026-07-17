@@ -1,18 +1,17 @@
 # 🌾 Agri-SMS Sentinel & Moderator 🛡️
 
 <div align="center">
-  <!-- Animated Typing SVG Header -->
-  <img src="https://readme-typing-svg.demolab.com?font=Outfit&amp;weight=800&amp;size=32&amp;duration=3500&amp;pause=1000&amp;color=2A966F&amp;center=true&amp;vCenter=true&amp;width=800&amp;height=100&amp;lines=🌾+Agri-SMS+Sentinel+&amp;+Moderator+🛡️;🧠+AI-Powered+Intent+Router+and+Filter;🚜+Empowering+Farmers+with+Instant+Routing" alt="Agri-SMS Sentinel Title" />
+  <img src="https://readme-typing-svg.demolab.com?font=Outfit&weight=800&size=32&duration=3500&pause=1000&color=2A966F&center=true&vCenter=true&width=800&height=100&lines=%F0%9F%8C%BE+Agri-SMS+Sentinel+%26+Moderator+%F0%9F%9B%A1%EF%B8%8F;%F0%9F%A7%A0+AI-Powered+Intent+Router+and+Filter;%F0%9F%9A%9C+Empowering+Farmers+with+Instant+Routing" alt="Agri-SMS Sentinel Title" />
   
   <p align="center">
     <strong>A State-of-the-Art Hybrid AI Ingestion, Filtering, and Routing Command Center for Regional Farmer Queries.</strong>
   </p>
 
   <!-- Badges -->
-  <img src="https://img.shields.io/badge/Python-3.9+-2A966F?style=for-the-badge&amp;logo=python&amp;logoColor=white" alt="Python Badge" />
-  <img src="https://img.shields.io/badge/Streamlit-1.49-green?style=for-the-badge&amp;logo=streamlit&amp;logoColor=white" alt="Streamlit Badge" />
-  <img src="https://img.shields.io/badge/Scikit--Learn-1.8.0-32B385?style=for-the-badge&amp;logo=scikit-learn&amp;logoColor=white" alt="Scikit-Learn Badge" />
-  <img src="https://img.shields.io/badge/Gemini--AI-2.5--Flash-1F7053?style=for-the-badge&amp;logo=google-gemini&amp;logoColor=white" alt="Gemini Badge" />
+  <img src="https://img.shields.io/badge/Python-3.9+-2A966F?style=for-the-badge&logo=python&logoColor=white" alt="Python Badge" />
+  <img src="https://img.shields.io/badge/Streamlit-1.49-green?style=for-the-badge&logo=streamlit&logoColor=white" alt="Streamlit Badge" />
+  <img src="https://img.shields.io/badge/Scikit--Learn-1.8.0-32B385?style=for-the-badge&logo=scikit-learn&logoColor=white" alt="Scikit-Learn Badge" />
+  <img src="https://img.shields.io/badge/Gemini--AI-2.5--Flash-1F7053?style=for-the-badge&logo=google-gemini&logoColor=white" alt="Gemini Badge" />
 </div>
 
 ---

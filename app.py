@@ -522,7 +522,11 @@ for label, query in sample_queries.items():
         st.session_state["farmers_input"] = query
 
 # --- MAIN DASHBOARD LAYOUT ---
-st.markdown("<h1 class='main-title'>🌾 Agri-SMS Sentinel & Moderator</h1>", unsafe_allow_html=True)
+st.markdown("""
+<div style="text-align: center; margin-bottom: 15px;">
+    <img src="https://readme-typing-svg.demolab.com?font=Outfit&weight=800&size=38&duration=3500&pause=1000&color=2A966F&center=true&vCenter=true&width=800&height=80&lines=%F0%9F%8C%BE+Agri-SMS+Sentinel+%26+Moderator+%F0%9F%9B%A1%EF%B8%8F;%F0%9F%A7%A0+AI-Powered+Intent+Router+and+Filter;%F0%9F%9A%9C+Empowering+Farmers+with+Instant+Routing" style="width: 100%; max-width: 800px;" alt="Agri-SMS Sentinel & Moderator" />
+</div>
+""", unsafe_allow_html=True)
 st.markdown("<p class='sub-title'>State-of-the-Art Agricultural Intent Routing & Moderation Command Center</p>", unsafe_allow_html=True)
 
 # Tabs structure
