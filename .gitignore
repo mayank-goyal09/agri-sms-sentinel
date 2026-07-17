@@ -3,6 +3,10 @@
 *.pkl
 *.npy
 
+# Exceptions for production models
+!tfidf_vectorizer.pkl
+!intent_classifier.pkl
+
 # Python caching and checkpoints
 __pycache__/
 .ipynb_checkpoints/
