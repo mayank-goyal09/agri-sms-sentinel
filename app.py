@@ -405,9 +405,13 @@ st.markdown("""
 # --- LOAD MODELS ---
 @st.cache_resource
 def load_models():
-    with open('tfidf_vectorizer.pkl', 'rb') as f:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    tfidf_path = os.path.join(current_dir, 'tfidf_vectorizer.pkl')
+    clf_path = os.path.join(current_dir, 'intent_classifier.pkl')
+    
+    with open(tfidf_path, 'rb') as f:
         tfidf_vec = pickle.load(f)
-    with open('intent_classifier.pkl', 'rb') as f:
+    with open(clf_path, 'rb') as f:
         lr_clf = pickle.load(f)
     return tfidf_vec, lr_clf
 
